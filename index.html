@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Сапёр · Сонар</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Chivo+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --abyss:#06161C;
+    --hull:#0C2731;
+    --panel:#0F3140;
+    --tile-a:#17505E;
+    --tile-b:#103A47;
+    --open:#09202A;
+    --line:rgba(180,230,235,.10);
+    --sonar:#4FD1C5;
+    --amber:#F2A65A;
+    --alarm:#E5484D;
+    --ink:#D7E7EA;
+    --ink-dim:#7C99A2;
+    --n1:#6FD3E8; --n2:#63D19A; --n3:#F2A65A; --n4:#B48CF2;
+    --n5:#E5737B; --n6:#37C3B4; --n7:#C9D4DB; --n8:#7B8A94;
+    --cell:32px;
+    --gap:3px;
+    font-synthesis-weight:none;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:
+      radial-gradient(120% 90% at 50% -10%, #12414F 0%, var(--abyss) 62%),
+      var(--abyss);
+    color:var(--ink);
+    font-family:"Chakra Petch",system-ui,-apple-system,"Segoe UI",sans-serif;
+    display:flex;align-items:center;justify-content:center;
+    padding:18px 14px calc(18px + env(safe-area-inset-bottom));
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+  }
+  .console{width:100%;max-width:min(96vw,1080px)}
+
+  /* —— шапка —— */
+  .top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+  h1{
+    font-size:clamp(26px,5vw,40px);font-weight:700;letter-spacing:.14em;
+    margin:0;line-height:1;
+    text-shadow:0 0 22px rgba(79,209,197,.28);
+  }
+  .sub{margin:6px 0 0;color:var(--ink-dim);font-size:13px;letter-spacing:.02em}
+
+  .modes{display:flex;gap:2px;padding:3px;border:1px solid var(--line);border-radius:999px;background:rgba(9,32,42,.7)}
+  .modes button{
+    appearance:none;border:0;background:transparent;color:var(--ink-dim);
+    font:600 13px/1 "Chakra Petch",sans-serif;letter-spacing:.06em;
+    padding:9px 15px;border-radius:999px;cursor:pointer;transition:color .15s,background .15s;
+  }
+  .modes button:hover{color:var(--ink)}
+  .modes button[aria-pressed="true"]{background:var(--sonar);color:#04181C}
+
+  /* —— приборная строка —— */
+  .gauges{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    padding:10px 12px;margin-bottom:12px;
+    border:1px solid var(--line);border-radius:10px;
+    background:linear-gradient(180deg,rgba(23,80,94,.35),rgba(9,32,42,.6));
+  }
+  .gauge{display:flex;align-items:baseline;gap:8px;padding-right:12px;border-right:1px solid var(--line)}
+  .gauge:last-of-type{border-right:0}
+  .gauge span{font-size:11px;color:var(--ink-dim);letter-spacing:.08em}
+  .gauge strong{font:600 22px/1 "Chivo Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;color:var(--sonar)}
+  .gauge.alert strong{color:var(--alarm)}
+  .spacer{flex:1}
+  .btn{
+    appearance:none;cursor:pointer;
+    border:1px solid rgba(79,209,197,.45);border-radius:8px;
+    background:rgba(79,209,197,.10);color:var(--sonar);
+    font:600 13px/1 "Chakra Petch",sans-serif;letter-spacing:.06em;padding:11px 16px;
+    transition:background .15s,transform .08s;
+  }
+  .btn:hover{background:rgba(79,209,197,.2)}
+  .btn:active{transform:translateY(1px)}
+  .btn[aria-pressed="true"]{background:var(--amber);border-color:var(--amber);color:#2A1603}
+
+  /* —— поле —— */
+  .field{position:relative;border:1px solid var(--line);border-radius:12px;padding:10px;background:rgba(6,22,28,.65);overflow:auto}
+  .board{
+    display:grid;
+    grid-template-columns:repeat(var(--cols),var(--cell));
+    gap:var(--gap);
+    margin:0 auto;width:max-content;
+    position:relative;
+  }
+  .cell{
+    width:var(--cell);height:var(--cell);padding:0;
+    border:1px solid rgba(190,240,240,.08);border-radius:4px;
+    background:linear-gradient(158deg,var(--tile-a),var(--tile-b));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.10);
+    color:var(--ink);cursor:pointer;
+    font:700 calc(var(--cell) * .56)/1 "Chivo Mono",ui-monospace,monospace;
+    display:flex;align-items:center;justify-content:center;
+    transition:background .12s,transform .06s;
+  }
+  .cell:hover:not(.open){background:linear-gradient(158deg,#1D6272,#154654)}
+  .cell:active:not(.open){transform:scale(.94)}
+  .cell:focus-visible{outline:2px solid var(--sonar);outline-offset:1px}
+  .cell.open{
+    background:var(--open);border-color:rgba(190,240,240,.05);
+    box-shadow:none;cursor:default;
+  }
+  .cell.open.empty{background:rgba(9,32,42,.45)}
+  .cell.n1{color:var(--n1)} .cell.n2{color:var(--n2)} .cell.n3{color:var(--n3)} .cell.n4{color:var(--n4)}
+  .cell.n5{color:var(--n5)} .cell.n6{color:var(--n6)} .cell.n7{color:var(--n7)} .cell.n8{color:var(--n8)}
+  .cell svg{width:66%;height:66%;display:block}
+  .cell.flag svg{color:var(--amber)}
+  .cell.mine{background:rgba(229,72,77,.16);border-color:rgba(229,72,77,.4);color:var(--alarm)}
+  .cell.detonated{background:var(--alarm);border-color:#ff8f92;color:#2B0508}
+  .cell.wrong{background:rgba(229,72,77,.10);color:var(--alarm)}
+  .cell.wrong::after{content:"×";position:absolute;font-size:calc(var(--cell)*.5)}
+  .cell.pop{animation:pop .18s ease-out}
+  @keyframes pop{from{transform:scale(.84);opacity:.45}to{transform:scale(1);opacity:1}}
+
+  /* —— итог —— */
+  .verdict{
+    position:absolute;inset:10px;display:none;place-items:center;
+    background:rgba(4,16,21,.82);backdrop-filter:blur(3px);border-radius:8px;z-index:3;
+  }
+  .verdict.on{display:grid}
+  .verdict .card{text-align:center;padding:26px 30px}
+  .verdict h2{margin:0 0 6px;font-size:clamp(22px,4vw,30px);letter-spacing:.1em}
+  .verdict p{margin:0 0 18px;color:var(--ink-dim);font-size:14px}
+  .verdict.win h2{color:var(--sonar);text-shadow:0 0 26px rgba(79,209,197,.4)}
+  .verdict.lose h2{color:var(--alarm)}
+  .ping{position:absolute;width:10px;height:10px;border-radius:50%;border:2px solid var(--sonar);opacity:0;pointer-events:none;z-index:2}
+  .verdict.win .ping{animation:ping 1.6s ease-out .1s 2}
+  @keyframes ping{from{transform:scale(1);opacity:.9}to{transform:scale(70);opacity:0}}
+
+  .hint{margin:12px 2px 0;color:var(--ink-dim);font-size:12.5px;line-height:1.6}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  @media (max-width:560px){
+    .top{align-items:flex-start}
+    .modes{width:100%;justify-content:space-between}
+    .modes button{flex:1;padding:10px 6px}
+  }
+</style>
+</head>
+<body>
+<div class="console">
+
+  <header class="top">
+    <div>
+      <h1>Сапёр</h1>
+      <p class="sub">Гидроакустический поиск мин. Цифра — сколько мин в соседних восьми ячейках.</p>
+    </div>
+    <div class="modes" role="group" aria-label="Уровень">
+      <button data-level="shallow" aria-pressed="true">Мелководье</button>
+      <button data-level="strait" aria-pressed="false">Пролив</button>
+      <button data-level="deep" aria-pressed="false">Глубина</button>
+    </div>
+  </header>
+
+  <div class="gauges">
+    <div class="gauge" id="mineGauge"><span>МИН</span><strong id="mineCount">010</strong></div>
+    <div class="gauge"><span>ВРЕМЯ</span><strong id="timer">000</strong></div>
+    <div class="gauge"><span>РЕКОРД</span><strong id="best">—</strong></div>
+    <div class="spacer"></div>
+    <button class="btn" id="flagMode" aria-pressed="false">Режим флажков</button>
+    <button class="btn" id="restart">Новая партия</button>
+  </div>
+
+  <div class="field">
+    <div class="board" id="board"></div>
+    <div class="verdict" id="verdict">
+      <div class="card">
+        <h2 id="verdictTitle"></h2>
+        <p id="verdictText"></p>
+        <button class="btn" id="again">Ещё раз</button>
+      </div>
+      <div class="ping" id="ping"></div>
+    </div>
+  </div>
+
+  <p class="hint">Клик — открыть, правый клик или долгое нажатие — флажок. Клик по открытой цифре, когда рядом выставлено столько же флажков, вскрывает остальных соседей. Первый ход всегда безопасен.</p>
+</div>
+
+<script>
+(() => {
+  const LEVELS = {
+    shallow:{cols:9, rows:9,  mines:10},
+    strait: {cols:16,rows:16, mines:40},
+    deep:   {cols:30,rows:16, mines:99}
+  };
+  const MINE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2.1 2.1M16.9 16.9L19 19M19 5l-2.1 2.1M7.1 16.9L5 19"/></svg>';
+  const FLAG_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V3"/><path d="M6 4h11l-2.2 3.5L17 11H6z" fill="currentColor" stroke="none"/></svg>';
+
+  const boardEl = document.getElementById('board');
+  const fieldEl = document.querySelector('.field');
+  const mineCountEl = document.getElementById('mineCount');
+  const mineGauge = document.getElementById('mineGauge');
+  const timerEl = document.getElementById('timer');
+  const bestEl = document.getElementById('best');
+  const verdict = document.getElementById('verdict');
+  const vTitle = document.getElementById('verdictTitle');
+  const vText = document.getElementById('verdictText');
+  const flagBtn = document.getElementById('flagMode');
+
+  let level = 'shallow', cols, rows, mines, cells = [], nodes = [];
+  let started = false, over = false, opened = 0, flags = 0;
+  let t0 = 0, tick = null, flagMode = false;
+
+  const idx = (x,y) => y*cols + x;
+  const pad = n => String(Math.min(999, Math.max(0, n))).padStart(3,'0');
+
+  function neighbors(i){
+    const x = i % cols, y = (i / cols) | 0, out = [];
+    for(let dy=-1; dy<=1; dy++) for(let dx=-1; dx<=1; dx++){
+      if(!dx && !dy) continue;
+      const nx = x+dx, ny = y+dy;
+      if(nx>=0 && nx<cols && ny>=0 && ny<rows) out.push(idx(nx,ny));
+    }
+    return out;
+  }
+
+  function fitCell(){
+    const avail = fieldEl.clientWidth - 22;
+    const raw = Math.floor((avail - (cols-1)*3) / cols);
+    const size = Math.max(20, Math.min(36, raw));
+    document.documentElement.style.setProperty('--cell', size + 'px');
+  }
+
+  function newGame(){
+    const cfg = LEVELS[level];
+    cols = cfg.cols; rows = cfg.rows; mines = cfg.mines;
+    cells = Array.from({length: cols*rows}, () => ({mine:false, open:false, flag:false, adj:0}));
+    started = false; over = false; opened = 0; flags = 0;
+    stopTimer(); timerEl.textContent = '000';
+    verdict.className = 'verdict';
+    mineGauge.classList.remove('alert');
+    updateMines();
+    loadBest();
+
+    boardEl.style.setProperty('--cols', cols);
+    boardEl.innerHTML = '';
+    nodes = cells.map((_, i) => {
+      const b = document.createElement('button');
+      b.className = 'cell';
+      b.type = 'button';
+      b.dataset.i = i;
+      b.setAttribute('aria-label','закрытая ячейка');
+      boardEl.appendChild(b);
+      return b;
+    });
+    fitCell();
+  }
+
+  function placeMines(safe){
+    const banned = new Set([safe, ...neighbors(safe)]);
+    let left = mines, pool = [];
+    for(let i=0;i<cells.length;i++) if(!banned.has(i)) pool.push(i);
+    while(left > 0 && pool.length){
+      const k = Math.floor(Math.random()*pool.length);
+      cells[pool[k]].mine = true;
+      pool.splice(k,1); left--;
+    }
+    for(let i=0;i<cells.length;i++){
+      if(cells[i].mine) continue;
+      cells[i].adj = neighbors(i).filter(n => cells[n].mine).length;
+    }
+  }
+
+  function paint(i, pop){
+    const c = cells[i], n = nodes[i];
+    n.className = 'cell';
+    n.innerHTML = '';
+    if(c.flag && !c.open){
+      n.classList.add('flag');
+      n.innerHTML = FLAG_SVG;
+      n.setAttribute('aria-label','флажок');
+      return;
+    }
+    if(!c.open){ n.setAttribute('aria-label','закрытая ячейка'); return; }
+    n.classList.add('open');
+    if(pop) n.classList.add('pop');
+    if(c.mine){ n.classList.add('mine'); n.innerHTML = MINE_SVG; n.setAttribute('aria-label','мина'); return; }
+    if(c.adj){ n.classList.add('n'+c.adj); n.textContent = c.adj; n.setAttribute('aria-label', c.adj + ' рядом'); }
+    else { n.classList.add('empty'); n.setAttribute('aria-label','пусто'); }
+  }
+
+  function open(i){
+    const c = cells[i];
+    if(c.open || c.flag || over) return;
+    if(!started){ placeMines(i); started = true; startTimer(); }
+    if(c.mine){ boom(i); return; }
+    const stack = [i];
+    while(stack.length){
+      const j = stack.pop(), cc = cells[j];
+      if(cc.open || cc.flag) continue;
+      cc.open = true; opened++; paint(j, true);
+      if(cc.adj === 0) neighbors(j).forEach(n => { if(!cells[n].open && !cells[n].flag) stack.push(n); });
+    }
+    if(opened === cells.length - mines) win();
+  }
+
+  function chord(i){
+    const c = cells[i];
+    if(!c.open || !c.adj || over) return;
+    const ns = neighbors(i);
+    if(ns.filter(n => cells[n].flag).length !== c.adj) return;
+    ns.forEach(n => { if(!cells[n].flag && !cells[n].open) open(n); });
+  }
+
+  function toggleFlag(i){
+    const c = cells[i];
+    if(c.open || over) return;
+    if(!started){ placeMines(i); started = true; startTimer(); }
+    c.flag = !c.flag;
+    flags += c.flag ? 1 : -1;
+    paint(i);
+    updateMines();
+  }
+
+  function updateMines(){
+    const left = mines - flags;
+    mineCountEl.textContent = pad(Math.abs(left));
+    mineGauge.classList.toggle('alert', left < 0);
+  }
+
+  function boom(i){
+    over = true; stopTimer();
+    cells[i].open = true; paint(i);
+    nodes[i].classList.add('detonated');
+    cells.forEach((c, j) => {
+      if(c.mine && !c.flag && j !== i){ c.open = true; paint(j); }
+      if(!c.mine && c.flag){ nodes[j].classList.add('wrong'); }
+    });
+    show('lose','Мина', 'Сигнал потерян на ' + (elapsed()) + '-й секунде.');
+  }
+
+  function win(){
+    over = true; stopTimer();
+    const t = elapsed();
+    cells.forEach((c,j) => { if(c.mine && !c.flag){ c.flag = true; flags++; paint(j); } });
+    updateMines();
+    const rec = saveBest(t);
+    show('win','Фарватер чист', rec ? 'Новый рекорд: ' + t + ' с.' : 'Время: ' + t + ' с.');
+  }
+
+  function show(kind, title, text){
+    vTitle.textContent = title;
+    vText.textContent = text;
+    verdict.className = 'verdict on ' + kind;
+  }
+
+  const elapsed = () => Math.floor((Date.now() - t0)/1000);
+  function startTimer(){ t0 = Date.now(); tick = setInterval(() => timerEl.textContent = pad(elapsed()), 250); }
+  function stopTimer(){ if(tick) clearInterval(tick); tick = null; }
+
+  function loadBest(){
+    let v = null;
+    try { v = localStorage.getItem('saper-best-' + level); } catch(e){}
+    bestEl.textContent = v ? pad(v) : '—';
+  }
+  function saveBest(t){
+    try {
+      const prev = localStorage.getItem('saper-best-' + level);
+      if(!prev || t < +prev){ localStorage.setItem('saper-best-' + level, t); loadBest(); return true; }
+    } catch(e){}
+    loadBest();
+    return false;
+  }
+
+  /* —— ввод —— */
+  let press = null, moved = false;
+
+  boardEl.addEventListener('click', e => {
+    const b = e.target.closest('.cell'); if(!b || over) return;
+    const i = +b.dataset.i;
+    if(flagMode) return toggleFlag(i);
+    if(cells[i].open) chord(i); else open(i);
+  });
+  boardEl.addEventListener('contextmenu', e => {
+    const b = e.target.closest('.cell'); if(!b) return;
+    e.preventDefault();
+    toggleFlag(+b.dataset.i);
+  });
+  boardEl.addEventListener('touchstart', e => {
+    const b = e.target.closest('.cell'); if(!b || over) return;
+    moved = false;
+    const i = +b.dataset.i;
+    press = setTimeout(() => {
+      press = null; moved = true;
+      toggleFlag(i);
+      if(navigator.vibrate) navigator.vibrate(18);
+    }, 420);
+  }, {passive:true});
+  const cancel = () => { if(press){ clearTimeout(press); press = null; } };
+  boardEl.addEventListener('touchmove', () => { moved = true; cancel(); }, {passive:true});
+  boardEl.addEventListener('touchend', cancel);
+  boardEl.addEventListener('touchcancel', cancel);
+
+  boardEl.addEventListener('keydown', e => {
+    const b = e.target.closest('.cell'); if(!b) return;
+    if(e.key === 'f' || e.key === 'а' || e.key === 'F'){ e.preventDefault(); toggleFlag(+b.dataset.i); }
+  });
+
+  flagBtn.addEventListener('click', () => {
+    flagMode = !flagMode;
+    flagBtn.setAttribute('aria-pressed', flagMode);
+    flagBtn.textContent = flagMode ? 'Флажки включены' : 'Режим флажков';
+  });
+  document.getElementById('restart').addEventListener('click', newGame);
+  document.getElementById('again').addEventListener('click', newGame);
+  document.querySelectorAll('.modes button').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.modes button').forEach(o => o.setAttribute('aria-pressed','false'));
+      b.setAttribute('aria-pressed','true');
+      level = b.dataset.level;
+      newGame();
+    });
+  });
+  window.addEventListener('resize', fitCell);
+
+  newGame();
+})();
+</script>
+</body>
+</html>
