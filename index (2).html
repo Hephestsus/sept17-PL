@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Что побеждает камень?</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; font-family: Arial, sans-serif; background: #fafaf7; color: #222;
+           display: flex; flex-direction: column; align-items: center; padding: 32px 16px; text-align: center; }
+    h1 { font-size: 34px; font-weight: normal; margin: 8px 0; }
+    h1 b { display: block; font-size: 48px; color: #e0562b; word-break: break-word; }
+    #emoji { font-size: 110px; margin: 10px 0; line-height: 1.1; }
+    .row { display: flex; gap: 8px; width: 100%; max-width: 380px; }
+    input { flex: 1; padding: 12px; font-size: 18px; border: 2px solid #222; border-radius: 10px; min-width: 0; }
+    button { padding: 12px 20px; font-size: 18px; font-weight: bold; border: 2px solid #222; border-radius: 10px;
+             background: #ffd84a; cursor: pointer; }
+    button:disabled { background: #ddd; cursor: default; }
+    .link { background: none; border: 0; padding: 0; font-size: 15px; font-weight: normal; color: #2a6fdb; text-decoration: underline; }
+    #msg { min-height: 56px; margin: 16px 0 8px; max-width: 380px; font-size: 17px; }
+    .ok { color: #1a8f3c; } .bad { color: #c62828; }
+    #lb { display: none; background: #fff; border: 2px solid #222; border-radius: 12px; padding: 12px 24px; margin-top: 14px; text-align: left; }
+    #lb ol { margin: 6px 0; padding-left: 20px; }
+    #history { margin-top: 18px; color: #666; font-size: 15px; max-width: 380px; }
+  </style>
+</head>
+<body>
+  <h1>что побеждает <b id="word"></b></h1>
+  <div id="emoji"></div>
+
+  <div class="row">
+    <input id="answer" placeholder="введи ответ..." maxlength="60" autofocus>
+    <button id="go">GO</button>
+  </div>
+
+  <div id="msg"></div>
+  <div>счёт: <b id="score">0</b> · рекорд: <b id="best">0</b>
+    <button class="link" id="lbBtn">(таблица лидеров)</button></div>
+
+  <div id="lb"><b>🏆 Лучшие игроки</b><ol id="lbList"></ol></div>
+  <div id="history"></div>
+  <p><button id="restart" class="link">начать заново</button></p>
+
+<script>
+  let current, emoji, score, used, over;
+  const $ = id => document.getElementById(id);
+  const norm = s => s.trim().toLowerCase().replace(/ё/g, "е");
+  const load = () => JSON.parse(localStorage.getItem("lb") || "[]");
+
+  function showBoard() {
+    const lb = load();
+    $("lbList").innerHTML = lb.length
+      ? lb.map(p => `<li>${p.name.replace(/</g, "&lt;")} — ${p.score}</li>`).join("")
+      : "<li>пока пусто</li>";
+    $("best").textContent = lb.length ? lb[0].score : 0;
+  }
+
+  function start() {
+    current = "камень"; emoji = "🪨"; score = 0; used = [current]; over = false;
+    $("word").textContent = current;
+    $("emoji").textContent = emoji;
+    $("score").textContent = 0;
+    $("msg").textContent = "";
+    $("history").textContent = "";
+    $("answer").value = "";
+    $("answer").disabled = $("go").disabled = false;
+    $("answer").focus();
+    showBoard();
+  }
+
+  function say(text, ok) {
+    $("msg").textContent = text;
+    $("msg").className = ok ? "ok" : "bad";
+  }
+
+  function saveScore() {
+    if (score === 0) return;
+    const name = prompt(`Ты набрал ${score}! Имя для таблицы лидеров:`, "Игрок") || "Аноним";
+    const lb = load();
+    lb.push({ name: name.slice(0, 20), score });
+    lb.sort((a, b) => b.score - a.score);
+    localStorage.setItem("lb", JSON.stringify(lb.slice(0, 10)));
+    showBoard();
+  }
+
+  async function guess() {
+    const raw = $("answer").value.trim();
+    if (!raw || over) return;
+    if (used.includes(norm(raw))) return say("Это уже было! Придумай что-то новое 🔁", false);
+
+    $("go").disabled = true;
+    say("ИИ думает... 🤔", true);
+
+    try {
+      const r = await fetch("/api/judge", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ current, guess: raw }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error);
+
+      if (data.beats) {
+        used.push(norm(raw));
+        $("history").textContent += `${emoji} ${current} → ${data.emoji} ${raw}\n`;
+        current = raw; emoji = data.emoji; score++;
+        $("word").textContent = current;
+        $("emoji").textContent = emoji;
+        $("score").textContent = score;
+        $("answer").value = "";
+        say(data.comment, true);
+        $("go").disabled = false;
+        $("answer").focus();
+      } else {
+        over = true;
+        $("emoji").textContent = data.emoji;
+        say(`${data.comment}  Игра окончена!`, false);
+        $("answer").disabled = true;
+        setTimeout(saveScore, 300);
+      }
+    } catch (e) {
+      say("Ошибка: " + e.message, false);
+      $("go").disabled = false;
+    }
+  }
+
+  $("go").onclick = guess;
+  $("answer").addEventListener("keydown", e => { if (e.key === "Enter") guess(); });
+  $("restart").onclick = start;
+  $("lbBtn").onclick = () => { $("lb").style.display = $("lb").style.display === "block" ? "none" : "block"; };
+  $("history").style.whiteSpace = "pre-line";
+  start();
+</script>
+</body>
+</html>
